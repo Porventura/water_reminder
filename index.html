@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Water Reminder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>window.TONE_SILENCE_LOGGING = true;</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .timer-circle {
+            stroke-dasharray: 283;
+            stroke-dashoffset: 283;
+            transition: stroke-dashoffset 1s linear;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 flex items-center justify-center min-h-screen py-8">
+
+    <div class="w-full max-w-sm mx-auto bg-slate-800 border border-slate-700 rounded-2xl shadow-xl shadow-black/40 p-8 text-center">
+        
+        <header class="mb-8">
+            <div class="flex items-center justify-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><path d="M12 22c-5.523 0-10-4.477-10-10S6.477 2 12 2s10 4.477 10 10c0 1.488-.323 2.893-.895 4.182M12 6v6l4 2"></path><path d="M19.13 18.88a1 1 0 0 1-1.26 1.26l-1.77-1.77a1 1 0 1 1 1.26-1.26l1.77 1.77z"></path></svg>
+                <h1 class="text-3xl font-bold text-slate-100">Water Reminder</h1>
+            </div>
+            <p id="status-text" class="text-slate-400 mt-2">Press 'Start' to begin your hydration journey.</p>
+        </header>
+
+        <!-- Timer Display -->
+        <div class="relative w-48 h-48 mx-auto mb-8 flex items-center justify-center">
+            <svg class="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <circle class="text-slate-700" stroke-width="8" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" />
+                <circle id="timer-progress" class="text-blue-500 timer-circle" stroke-width="8" stroke-linecap="round" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" />
+            </svg>
+            <div id="countdown" class="text-5xl font-semibold text-slate-100">45:00</div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="grid grid-cols-2 gap-4 mb-8">
+            <button id="start-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <span>Start</span>
+            </button>
+            <button id="stop-btn" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12"></rect></svg>
+                <span>Stop</span>
+            </button>
+        </div>
+        
+        <button id="reset-btn" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-3 px-4 rounded-lg transition duration-300 flex items-center justify-center gap-2 mb-8">
+             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v6h6"></path><path d="M21 12A9 9 0 0 0 6 5.3L3 8"></path><path d="M21 22v-6h-6"></path><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"></path></svg>
+            <span>Reset Timer</span>
+        </button>
+
+        <button id="test-sound-btn" class="text-sm text-blue-400 hover:text-blue-300 underline">
+            Test sound
+        </button>
+
+        <!-- Notification Permission -->
+        <div id="notification-banner" class="hidden mt-6 p-3 bg-yellow-900/40 border-l-4 border-yellow-500 text-yellow-200 rounded-lg">
+            <p>Please <button id="enable-notifications-btn" class="font-bold underline">enable notifications</button> for reminders.</p>
+        </div>
+
+    </div>
+
+    <script>
+        // DOM Elements
+        const countdownEl = document.getElementById('countdown');
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const statusText = document.getElementById('status-text');
+        const timerProgress = document.getElementById('timer-progress');
+        const notificationBanner = document.getElementById('notification-banner');
+        const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
+        const testSoundBtn = document.getElementById('test-sound-btn');
+
+        // Timer State
+        let timerInterval;
+        let secondsLeft;
+        const REMINDER_MINUTES = 45;
+        const TOTAL_SECONDS = REMINDER_MINUTES * 60;
+        const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 45; // 2 * pi * r
+
+        // Initial Setup
+        document.addEventListener('DOMContentLoaded', () => {
+            resetTimer();
+            if (notificationPermission() === 'default') {
+                notificationBanner.classList.remove('hidden');
+            }
+        });
+
+        // Event Listeners
+        startBtn.addEventListener('click', onStartClick);
+        stopBtn.addEventListener('click', stopTimer);
+        resetBtn.addEventListener('click', resetTimer);
+        enableNotificationsBtn.addEventListener('click', requestNotificationPermission);
+        testSoundBtn.addEventListener('click', playSound);
+
+        // Estado das notificações: 'granted', 'denied' ou 'default' (ainda não respondeu)
+        function notificationPermission() {
+            return ('Notification' in window) ? Notification.permission : 'denied';
+        }
+
+        function onStartClick() {
+            startBtn.disabled = true; // evita duplo clique enquanto se espera pela resposta
+            // O browser só deixa tocar som depois de um clique: ativa o áudio aqui
+            if (window.Tone) Tone.start();
+
+            if (notificationPermission() === 'default') {
+                // Pede permissão uma vez e arranca o temporizador seja qual for a resposta
+                requestNotificationPermission().then(() => startTimer());
+            } else {
+                startTimer();
+            }
+        }
+
+        function startTimer() {
+            const now = Date.now();
+            const then = now + secondsLeft * 1000;
+            displayTimeLeft(secondsLeft);
+
+            timerInterval = setInterval(() => {
+                secondsLeft = Math.round((then - Date.now()) / 1000);
+
+                if (secondsLeft < 0) {
+                    clearInterval(timerInterval);
+                    handleTimerEnd();
+                    return;
+                }
+                displayTimeLeft(secondsLeft);
+            }, 1000);
+            
+            updateUIState('running');
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            updateUIState('stopped');
+        }
+        
+        function resetTimer() {
+            clearInterval(timerInterval);
+            secondsLeft = TOTAL_SECONDS;
+            displayTimeLeft(secondsLeft);
+            updateUIState('initial');
+        }
+
+        function handleTimerEnd() {
+            showNotification();
+            playSound();
+                        // Automatically restart for the next interval
+            resetTimer();
+            startTimer();
+        }
+
+        function displayTimeLeft(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainderSeconds = seconds % 60;
+            const display = `${minutes}:${remainderSeconds < 10 ? '0' : ''}${remainderSeconds}`;
+            countdownEl.textContent = display;
+            document.title = `${display} - Water Reminder`;
+            updateProgressCircle(seconds);
+        }
+
+        function updateProgressCircle(seconds) {
+            const offset = CIRCLE_CIRCUMFERENCE - (seconds / TOTAL_SECONDS) * CIRCLE_CIRCUMFERENCE;
+            timerProgress.style.strokeDashoffset = offset;
+        }
+
+        function updateUIState(state) {
+            if (state === 'running') {
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                statusText.textContent = notificationPermission() === 'granted'
+                    ? "Time until next reminder..."
+                    : "Time until next reminder (sound only, notifications blocked)...";
+                statusText.classList.remove('text-red-400');
+                statusText.classList.add('text-slate-400');
+            } else if (state === 'stopped') {
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                statusText.textContent = "Timer paused. Press Start to resume.";
+                statusText.classList.add('text-red-400');
+            } else { // initial state
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                statusText.textContent = "Press 'Start' to begin your hydration journey.";
+                statusText.classList.remove('text-red-400');
+                statusText.classList.add('text-slate-400');
+            }
+        }
+
+        // Devolve sempre uma promessa com a resposta; nunca bloqueia o temporizador
+        function requestNotificationPermission() {
+            if (!('Notification' in window)) return Promise.resolve('denied');
+
+            return Notification.requestPermission()
+                .catch(() => 'denied')
+                .then(permission => {
+                    // Esconde o aviso se o utilizador já respondeu (sim ou não)
+                    if (permission !== 'default') notificationBanner.classList.add('hidden');
+                    // Atualiza a frase de estado se o temporizador já estiver a correr
+                    if (stopBtn.disabled === false) updateUIState('running');
+                    return permission;
+                });
+        }
+
+        function showNotification() {
+            if (notificationPermission() === 'granted') {
+                const notification = new Notification('Time to Hydrate! 💧', {
+                    body: 'Grab a glass of water. It\'s been 45 minutes!',
+                    requireInteraction: true, // fica no ecrã até fechares
+                    icon: 'https://placehold.co/128x128/3B82F6/FFFFFF?text=%F0%9F%92%A7' // A simple water drop icon
+                });
+            }
+        }
+
+        // --- Som do lembrete ---
+        // Podes ajustar estes valores:
+        const BT_WAKE_SECONDS = 1.5;  // tom quase inaudível antes do toque, para "acordar" os auscultadores Bluetooth
+        const SOUND_REPEATS = 1;      // quantas vezes o toque se repete
+        const SOUND_VOLUME_DB = -6;   // volume do toque (0 = máximo; mais negativo = mais baixo)
+
+        let chimeSynth = null;
+        let wakeTone = null;
+
+        function setupSound() {
+            if (chimeSynth) return;
+
+            // Sintetizador com várias vozes, timbre "triangle" (corta melhor por cima de música que o "sine")
+            chimeSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: 'triangle' },
+                envelope: { attack: 0.01, decay: 0.3, sustain: 0.25, release: 1.2 }
+            }).toDestination();
+            chimeSynth.volume.value = SOUND_VOLUME_DB;
+
+            // Tom grave a -60 dB: praticamente não se ouve, mas obriga o canal Bluetooth a ligar-se
+            wakeTone = new Tone.Oscillator(150, 'sine').toDestination();
+            wakeTone.volume.value = -60;
+        }
+
+        function playSound() {
+            if (!window.Tone) return; // Tone.js não carregou (sem internet?)
+            Tone.start();
+            setupSound();
+
+            const roundLength = 1.6; // segundos entre o início de cada repetição
+            const t0 = Tone.now() + 0.05;
+            const chimeStart = t0 + BT_WAKE_SECONDS;
+            const end = chimeStart + SOUND_REPEATS * roundLength + 1.2;
+
+            // 1) O tom de "acordar" começa já e só pára no fim, para o Bluetooth não adormecer a meio
+            wakeTone.start(t0).stop(end);
+
+            // 2) O toque: arpejo ascendente Dó-Mi-Sol-Dó, repetido SOUND_REPEATS vezes
+            const notes = ['C5', 'E5', 'G5', 'C6'];
+            for (let r = 0; r < SOUND_REPEATS; r++) {
+                const base = chimeStart + r * roundLength;
+                notes.forEach((note, i) => {
+                    const isLast = i === notes.length - 1;
+                    chimeSynth.triggerAttackRelease(note, isLast ? 0.6 : 0.2, base + i * 0.15);
+                });
+            }
+        }
+
+    </script>
+
+</body>
+</html>
+
